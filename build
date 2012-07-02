@@ -1,0 +1,75 @@
+#!/bin/bash
+
+#Let's try to detect where Xcode.app is
+
+XCODEPATH=$(mdfind -name Xcode.app);
+
+#you can safely override the above with just assigning XCODEPATH path to your XCode app (say, /Applications/Xcode.app)
+
+if [ -n $xcodepath ]; then
+  echo "XCode found at $XCODEPATH"
+else
+  echo "XCode not found" && exit
+fi
+
+IPHONE_GCC="${XCODEPATH}/Contents/Developer/usr/bin/gcc"
+
+if [ -e $IPHONE_GCC ]; then
+        echo "iPhone gcc found at ${IPHONE_GCC}"
+else
+        echo "iPhone gcc NOT FOUND" && exit
+fi
+
+#let's clone latest version of FFmpeg; you can comment this out if you already have it in current directory
+
+echo Cloning FFmpeg from github...
+
+git clone https://github.com/FFmpeg/FFmpeg.git
+
+cd FFmpeg
+
+echo Building ARMV7 libs...
+
+./configure --extra-ldflags=-L${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.1.sdk/usr/lib/system --disable-bzlib --disable-doc  --enable-cross-compile --arch=arm --target-os=darwin --cc=${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/gcc --sysroot=${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.1.sdk --cpu=cortex-a8 --enable-pic  --disable-zlib --disable-bzlib  --enable-decoder=h264  --enable-demuxer=h264 --enable-parser=h264 --disable-asm --extra-cflags='-arch armv7' --extra-ldflags='-arch armv7'
+
+make clean
+make
+
+
+mkdir ../build_results
+mkdir ../build_results/armv7
+mv `find . -name "*.a"` ../build_results/armv7/
+
+echo Building ARMV6 libs...
+
+./configure --extra-ldflags=-L${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.1.sdk/usr/lib/system --disable-bzlib --disable-doc  --enable-cross-compile --arch=arm --target-os=darwin --cc=${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/gcc --sysroot=${XCODEPATH}/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.1.sdk --enable-pic  --disable-zlib --disable-bzlib  --enable-decoder=h264  --enable-demuxer=h264 --enable-parser=h264 --disable-asm --extra-cflags='-arch armv6' --extra-ldflags='-arch armv6'
+
+make clean
+make
+
+mkdir ../build_results/armv6
+mv `find . -name "*.a"` ../build_results/armv6/
+
+echo Building i386 libs
+
+./configure --extra-ldflags=-L${XCODEPATH}/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator5.1.sdk/usr/lib/system --disable-bzlib --disable-doc  --enable-cross-compile --arch=i386 --target-os=darwin --cc=${XCODEPATH}/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc --sysroot=${XCODEPATH}/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator5.1.sdk --enable-pic  --disable-zlib --disable-bzlib  --enable-decoder=h264  --enable-demuxer=h264 --enable-parser=h264 --disable-asm --extra-cflags='-arch i386' --extra-ldflags='-arch i386'
+
+make clean
+make
+
+mkdir ../build_results/i386
+mv `find . -name "*.a"` ../build_results/i386/
+  
+echo Creating universal libs in build_results/Universal...
+
+mkdir ../build_results/Universal
+
+cd ../build_results 
+
+for l in `echo -ne "libavcodec\nlibavfilter\nlibavutil\nlibswscale\nlibavdevice\nlibavformat\nlibswresample"`; do
+	lipo -create "i386/$l.a" "armv6/$l.a" "armv7/$l.a" -output "Universal/$l.a";
+done 
+  
+echo Complete!
+
+
